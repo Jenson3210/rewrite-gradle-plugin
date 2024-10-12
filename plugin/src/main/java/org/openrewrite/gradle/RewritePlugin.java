@@ -23,7 +23,11 @@ import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.artifacts.dsl.DependencyHandler;
-import org.gradle.api.attributes.*;
+import org.gradle.api.attributes.Attribute;
+import org.gradle.api.attributes.Bundling;
+import org.gradle.api.attributes.Category;
+import org.gradle.api.attributes.LibraryElements;
+import org.gradle.api.attributes.Usage;
 import org.gradle.api.attributes.java.TargetJvmEnvironment;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.plugins.JavaBasePlugin;
@@ -230,8 +234,10 @@ public class RewritePlugin implements Plugin<Project> {
                         return 1;
                     }
                 }),
+                deps.create("com.fasterxml.jackson.core:jackson-core:" + extension.getJacksonModuleKotlinVersion()),
                 deps.create("com.fasterxml.jackson.module:jackson-module-kotlin:" + extension.getJacksonModuleKotlinVersion()),
-                deps.create("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:" + extension.getJacksonModuleKotlinVersion())
+                deps.create("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:" + extension.getJacksonModuleKotlinVersion()),
+                deps.create("com.contrastsecurity:java-sarif:latest.release")
         );
     }
 }

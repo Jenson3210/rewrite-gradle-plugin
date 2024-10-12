@@ -22,7 +22,12 @@ import javax.inject.Provider;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
@@ -48,6 +53,12 @@ public class RewriteExtension {
     private final List<String> plainTextMasks = new ArrayList<>();
 
     private int sizeThresholdMb = 10;
+
+    @Nullable
+    private String reportPath;
+
+    @Nullable
+    private String reportFormat;
 
     @Nullable
     private String rewriteVersion;
@@ -365,5 +376,23 @@ public class RewriteExtension {
 
     public void setThrowOnParseFailures(boolean throwOnParseFailures) {
         this.throwOnParseFailures = throwOnParseFailures;
+    }
+
+    @Nullable
+    public String getReportPath() {
+        return reportPath;
+    }
+
+    public void setReportPath(@Nullable final String reportPath) {
+        this.reportPath = reportPath;
+    }
+
+    @Nullable
+    public String getReportFormat() {
+        return reportFormat;
+    }
+
+    public void setReportFormat(@Nullable final String reportFormat) {
+        this.reportFormat = reportFormat;
     }
 }

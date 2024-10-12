@@ -37,7 +37,17 @@ import org.gradle.invocation.DefaultGradle;
 import org.gradle.util.GradleVersion;
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet;
 import org.jspecify.annotations.Nullable;
-import org.openrewrite.*;
+import org.openrewrite.ExecutionContext;
+import org.openrewrite.FileAttributes;
+import org.openrewrite.InMemoryExecutionContext;
+import org.openrewrite.ParseExceptionResult;
+import org.openrewrite.Parser;
+import org.openrewrite.PrintOutputCapture;
+import org.openrewrite.Recipe;
+import org.openrewrite.RecipeRun;
+import org.openrewrite.Result;
+import org.openrewrite.SourceFile;
+import org.openrewrite.Validated;
 import org.openrewrite.binary.Binary;
 import org.openrewrite.config.Environment;
 import org.openrewrite.config.RecipeDescriptor;
@@ -50,6 +60,11 @@ import org.openrewrite.gradle.marker.GradleProject;
 import org.openrewrite.gradle.marker.GradleProjectBuilder;
 import org.openrewrite.gradle.marker.GradleSettings;
 import org.openrewrite.gradle.marker.GradleSettingsBuilder;
+import org.openrewrite.gradle.resultlogging.DiffWriter;
+import org.openrewrite.gradle.resultlogging.ResultWriter;
+import org.openrewrite.gradle.resultlogging.ReviewdogJsonLinesWriter;
+import org.openrewrite.gradle.resultlogging.SarifWriter;
+import org.openrewrite.gradle.resultlogging.Slf4jWriter;
 import org.openrewrite.groovy.GroovyParser;
 import org.openrewrite.internal.InMemoryLargeSourceSet;
 import org.openrewrite.internal.ListUtils;
@@ -63,9 +78,17 @@ import org.openrewrite.java.style.CheckstyleConfigLoader;
 import org.openrewrite.java.tree.J;
 import org.openrewrite.kotlin.KotlinParser;
 import org.openrewrite.kotlin.tree.K;
-import org.openrewrite.marker.*;
+import org.openrewrite.marker.BuildTool;
+import org.openrewrite.marker.GitProvenance;
+import org.openrewrite.marker.Marker;
+import org.openrewrite.marker.Markers;
+import org.openrewrite.marker.OperatingSystemProvenance;
 import org.openrewrite.marker.ci.BuildEnvironment;
-import org.openrewrite.polyglot.*;
+import org.openrewrite.polyglot.NoopProgressBar;
+import org.openrewrite.polyglot.OmniParser;
+import org.openrewrite.polyglot.ProgressBar;
+import org.openrewrite.polyglot.RemoteProgressBarSender;
+import org.openrewrite.polyglot.SourceFileStream;
 import org.openrewrite.properties.PropertiesParser;
 import org.openrewrite.quark.Quark;
 import org.openrewrite.quark.QuarkParser;
@@ -76,15 +99,40 @@ import org.openrewrite.tree.ParsingEventListener;
 import org.openrewrite.tree.ParsingExecutionContextView;
 import org.openrewrite.xml.tree.Xml;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.UncheckedIOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.PathMatcher;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -92,8 +140,12 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.Collections.*;
-import static java.util.stream.Collectors.*;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
+import static java.util.stream.Collectors.joining;
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toMap;
 import static org.openrewrite.PathUtils.separatorsToUnix;
 import static org.openrewrite.Tree.randomId;
 import static org.openrewrite.tree.ParsingExecutionContextView.view;
@@ -209,6 +261,24 @@ public class DefaultProjectParser implements GradleProjectParser {
     }
 
     @Override
+    public String getReportPath() {
+        String reportFile = getPropertyWithVariantNames("reportFile");
+        if (reportFile == null) {
+            return extension.getReportPath();
+        }
+        return reportFile;
+    }
+
+    @Override
+    public String getReportFormat() {
+        String reportFormat = getPropertyWithVariantNames("reportFormat");
+        if (reportFormat == null) {
+            return extension.getReportFormat();
+        }
+        return reportFormat;
+    }
+
+    @Override
     public List<String> getAvailableStyles() {
         return environment().listStyles().stream().map(NamedStyles::getName).collect(toList());
     }
@@ -293,7 +363,7 @@ public class DefaultProjectParser implements GradleProjectParser {
     }
 
     @Override
-    public void dryRun(Path reportPath, boolean dumpGcActivity, Consumer<Throwable> onError) {
+    public void dryRun(boolean dumpGcActivity, Consumer<Throwable> onError) {
         ParsingExecutionContextView ctx = view(new InMemoryExecutionContext(onError));
         if (dumpGcActivity) {
             SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
@@ -321,7 +391,7 @@ public class DefaultProjectParser implements GradleProjectParser {
                                 }
                             }
                         });
-                        dryRun(reportPath, listResults(ctx));
+                        dryRun(listResults(ctx));
                         logWriter.flush();
                         logger.lifecycle("Wrote rewrite GC log: {}", rewriteGcLog.getAbsolutePath());
                     } catch (IOException e) {
@@ -331,11 +401,11 @@ public class DefaultProjectParser implements GradleProjectParser {
                 }
             }
         } else {
-            dryRun(reportPath, listResults(ctx));
+            dryRun(listResults(ctx));
         }
     }
 
-    public void dryRun(Path reportPath, ResultsContainer results) {
+    public void dryRun(ResultsContainer results) {
         try {
             RuntimeException firstException = results.getFirstException();
             if (firstException != null) {
@@ -343,63 +413,46 @@ public class DefaultProjectParser implements GradleProjectParser {
                 throw firstException;
             }
 
-            if (results.isNotEmpty()) {
-                Duration estimateTimeSaved = Duration.ZERO;
-                for (Result result : results.generated) {
-                    assert result.getAfter() != null;
-                    logger.warn("These recipes would generate new file {}:", result.getAfter().getSourcePath());
-                    logRecipesThatMadeChanges(result);
-                    estimateTimeSaved = estimateTimeSavedSum(result, estimateTimeSaved);
-                }
-                for (Result result : results.deleted) {
-                    assert result.getBefore() != null;
-                    logger.warn("These recipes would delete file {}:", result.getBefore().getSourcePath());
-                    logRecipesThatMadeChanges(result);
-                    estimateTimeSaved = estimateTimeSavedSum(result, estimateTimeSaved);
-                }
-                for (Result result : results.moved) {
-                    assert result.getBefore() != null;
-                    assert result.getAfter() != null;
-                    logger.warn("These recipes would move file from {} to {}:", result.getBefore().getSourcePath(), result.getAfter().getSourcePath());
-                    logRecipesThatMadeChanges(result);
-                    estimateTimeSaved = estimateTimeSavedSum(result, estimateTimeSaved);
-                }
-                for (Result result : results.refactoredInPlace) {
-                    assert result.getBefore() != null;
-                    logger.warn("These recipes would make changes to {}:", result.getBefore().getSourcePath());
-                    logRecipesThatMadeChanges(result);
-                    estimateTimeSaved = estimateTimeSavedSum(result, estimateTimeSaved);
-                }
+            try {
+                List<ResultWriter> resultWriters = Arrays.asList(new Slf4jWriter(), getResultWriter());
 
-                //noinspection ResultOfMethodCallIgnored
-                reportPath.getParent().toFile().mkdirs();
-                try (BufferedWriter writer = Files.newBufferedWriter(reportPath)) {
-                    Stream.concat(
-                                    Stream.concat(results.generated.stream(), results.deleted.stream()),
-                                    Stream.concat(results.moved.stream(), results.refactoredInPlace.stream()))
-                            // cannot meaningfully display diffs of these things. Console output notes that they were touched by a recipe.
-                            .filter(it -> !(it.getAfter() instanceof Binary) && !(it.getAfter() instanceof Quark))
-                            .map(Result::diff)
-                            .forEach(diff -> {
-                                try {
-                                    writer.write(diff + "\n");
-                                } catch (IOException e) {
-                                    throw new RuntimeException(e);
-                                }
-                            });
-                } catch (Exception e) {
-                    throw new RuntimeException("Unable to generate rewrite result file.", e);
-                }
-                logger.warn("Report available:");
-                logger.warn("    {}", reportPath.normalize());
-                logger.warn("Estimate time saved: {}", formatDuration(estimateTimeSaved));
-                logger.warn("Run 'gradle rewriteRun' to apply the recipes.");
+                if (results.isNotEmpty()) {
+                    resultWriters.forEach(ResultWriter::open);
+                    Duration estimateTimeSaved = Duration.ZERO;
+                    for (Result result : results.generated) {
+                        assert result.getAfter() != null;
+                        estimateTimeSaved = estimateTimeSavedSum(result, estimateTimeSaved);
+                        resultWriters.forEach(rw -> rw.generated(result));
+                    }
+                    for (Result result : results.deleted) {
+                        assert result.getBefore() != null;
+                        estimateTimeSaved = estimateTimeSavedSum(result, estimateTimeSaved);
+                        resultWriters.forEach(rw -> rw.deleted(result));
+                    }
+                    for (Result result : results.moved) {
+                        assert result.getBefore() != null;
+                        assert result.getAfter() != null;
+                        estimateTimeSaved = estimateTimeSavedSum(result, estimateTimeSaved);
+                        resultWriters.forEach(rw -> rw.moved(result));
+                    }
+                    for (Result result : results.refactoredInPlace) {
+                        assert result.getBefore() != null;
+                        estimateTimeSaved = estimateTimeSavedSum(result, estimateTimeSaved);
+                        resultWriters.forEach(rw -> rw.altered(result));
+                    }
+                    resultWriters.forEach(ResultWriter::close);
 
-                if (project.getExtensions().getByType(RewriteExtension.class).getFailOnDryRunResults()) {
-                    throw new RuntimeException("Applying recipes would make changes. See logs for more details.");
+                    logger.warn("Estimate time saved: {}", formatDuration(estimateTimeSaved));
+                    logger.warn("Run 'gradle rewriteRun' to apply the recipes.");
+
+                    if (project.getExtensions().getByType(RewriteExtension.class).getFailOnDryRunResults()) {
+                        throw new RuntimeException("Applying recipes would make changes. See logs for more details.");
+                    }
+                } else {
+                    logger.lifecycle("Applying recipes would make no changes. No report generated.");
                 }
-            } else {
-                logger.lifecycle("Applying recipes would make no changes. No report generated.");
+            } catch (IOException e) {
+                throw new UncheckedIOException("Unable to write rewrite results. ", e);
             }
         } finally {
             shutdownRewrite();
@@ -530,6 +583,33 @@ public class DefaultProjectParser implements GradleProjectParser {
         } finally {
             shutdownRewrite();
         }
+    }
+
+    public ResultWriter getResultWriter() throws IOException {
+        String format = getReportFormat();
+        String path = getReportPath();
+        if (format == null) {
+            return new DiffWriter(path);
+        }
+        ResultWriter writer;
+        GitProvenance gitProvenance = sharedProvenance.stream()
+                                                      .filter(GitProvenance.class::isInstance)
+                                                      .map(GitProvenance.class::cast)
+                                                      .findFirst()
+                                                      .orElse(null);
+        switch (format) {
+            case "sarif":
+                writer = new SarifWriter(path, listRecipeDescriptors(), gitProvenance);
+                break;
+            case "rdjsonl":
+                writer = new ReviewdogJsonLinesWriter(path);
+                break;
+            case "diff":
+            default:
+                writer = new DiffWriter(path);
+                break;
+        }
+        return writer;
     }
 
     private static Duration estimateTimeSavedSum(Result result, Duration timeSaving) {

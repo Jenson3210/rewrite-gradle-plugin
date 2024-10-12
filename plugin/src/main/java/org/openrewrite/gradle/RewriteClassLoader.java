@@ -30,9 +30,12 @@ import java.util.List;
 public class RewriteClassLoader extends URLClassLoader {
 
     private static final List<String> PARENT_LOADED_PACKAGES = Arrays.asList(
+            "org.openrewrite.gradle.isolated.DefaultProjectParser",
             "org.openrewrite.gradle.GradleProjectParser",
             "org.openrewrite.gradle.DefaultRewriteExtension",
             "org.openrewrite.gradle.RewriteExtension",
+            "org.openrewrite.gradle.resultlogging",
+            "org.openrewrite",
             "org.slf4j",
             "org.gradle",
             "groovy",

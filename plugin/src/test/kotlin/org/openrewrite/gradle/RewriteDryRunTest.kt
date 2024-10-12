@@ -93,6 +93,74 @@ class RewriteDryRunTest : RewritePluginTest {
     }
 
     @Test
+    fun `rewriteDryRun runs successfully with requested output`() {
+        //language=java
+        val helloWorld = """
+            package org.openrewrite.before;
+            
+            public class HelloWorld { public static void sayGoodbye() {System.out.println("Hello world");
+                }public static void main(String[] args) {   sayGoodbye(); }
+            }
+        """.trimIndent()
+        gradleProject(projectDir) {
+            rewriteYaml(
+                """
+                type: specs.openrewrite.org/v1beta/recipe
+                name: org.openrewrite.gradle.SayHello
+                description: Test.
+                recipeList:
+                  - org.openrewrite.java.ChangeMethodName:
+                      methodPattern: org.openrewrite.before.HelloWorld sayGoodbye()
+                      newMethodName: sayHello
+                  - org.openrewrite.java.ChangePackage:
+                      oldPackageName: org.openrewrite.before
+                      newPackageName: org.openrewrite.after
+            """
+            )
+            buildGradle(
+                """
+                plugins {
+                    id("java")
+                    id("org.openrewrite.rewrite")
+                }
+                
+                repositories {
+                    mavenLocal()
+                    mavenCentral()
+                    maven {
+                       url = uri("https://oss.sonatype.org/content/repositories/snapshots")
+                    }
+                }
+                
+                rewrite {
+                    activeRecipe("org.openrewrite.gradle.SayHello", "org.openrewrite.java.format.AutoFormat")
+                }
+            """
+            )
+            sourceSet("main") {
+                java(helloWorld)
+                java("""
+                    package org.openrewrite.after;
+                    
+                    public class NotTouched {
+                        public static void sayHello() {
+                            System.out.println("Hello world");
+                        }
+                    }
+                """.trimIndent())
+            }
+        }
+        val result = runGradle(projectDir, taskName(), "-DreportFormat=sarif")
+        val rewriteDryRunResult = result.task(":${taskName()}")!!
+        assertThat(rewriteDryRunResult.outcome).isEqualTo(TaskOutcome.SUCCESS)
+
+        assertThat(
+            File(projectDir, "src/main/java/org/openrewrite/before/HelloWorld.java").readText()
+        ).isEqualTo(helloWorld)
+        assertThat(File(projectDir, "build/reports/rewrite/output").exists()).isTrue
+    }
+
+    @Test
     fun `A recipe with optional configuration can be activated directly`() {
         gradleProject(projectDir) {
             buildGradle(

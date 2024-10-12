@@ -16,7 +16,10 @@
 package org.openrewrite.gradle;
 
 import org.gradle.internal.service.ServiceRegistry;
+import org.openrewrite.gradle.resultlogging.ResultWriter;
 
+import javax.annotation.Nullable;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
@@ -26,6 +29,14 @@ public interface GradleProjectParser {
     List<String> getActiveRecipes();
 
     List<String> getActiveStyles();
+
+    @Nullable
+    String getReportPath();
+
+    @Nullable
+    String getReportFormat();
+
+    ResultWriter getResultWriter() throws IOException;
 
     List<String> getAvailableStyles();
 
@@ -43,7 +54,7 @@ public interface GradleProjectParser {
 
     void run(Consumer<Throwable> onError);
 
-    void dryRun(Path reportPath, boolean dumpGcActivity, Consumer<Throwable> onError);
+    void dryRun(boolean dumpGcActivity, Consumer<Throwable> onError);
 
     void shutdownRewrite();
 }

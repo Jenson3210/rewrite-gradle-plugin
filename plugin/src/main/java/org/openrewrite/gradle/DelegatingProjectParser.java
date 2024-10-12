@@ -18,7 +18,9 @@ package org.openrewrite.gradle;
 import org.gradle.api.Project;
 import org.gradle.internal.service.ServiceRegistry;
 import org.jspecify.annotations.Nullable;
+import org.openrewrite.gradle.resultlogging.ResultWriter;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -92,6 +94,21 @@ public class DelegatingProjectParser implements GradleProjectParser {
     }
 
     @Override
+    public String getReportPath() {
+        return unwrapInvocationException(gpp::getReportPath);
+    }
+
+    @Override
+    public String getReportFormat() {
+        return unwrapInvocationException(gpp::getReportFormat);
+    }
+
+    @Override
+    public ResultWriter getResultWriter() throws IOException {
+        return unwrapInvocationException(gpp::getResultWriter);
+    }
+
+    @Override
     public List<String> getAvailableStyles() {
         return unwrapInvocationException(gpp::getAvailableStyles);
     }
@@ -118,9 +135,9 @@ public class DelegatingProjectParser implements GradleProjectParser {
     }
 
     @Override
-    public void dryRun(Path reportPath, boolean dumpGcActivity, Consumer<Throwable> onError) {
+    public void dryRun(boolean dumpGcActivity, Consumer<Throwable> onError) {
         unwrapInvocationException(() -> {
-            gpp.dryRun(reportPath, dumpGcActivity, onError);
+            gpp.dryRun(dumpGcActivity, onError);
             return null;
         });
     }

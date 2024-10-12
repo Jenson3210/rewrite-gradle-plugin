@@ -20,8 +20,12 @@ import org.gradle.api.logging.Logging;
 import org.gradle.api.specs.Specs;
 import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
+import org.openrewrite.gradle.resultlogging.ResultOutputFileWriter;
+import org.openrewrite.gradle.resultlogging.ResultWriter;
 
+import javax.annotation.Nullable;
 import javax.inject.Inject;
+import java.io.IOException;
 import java.nio.file.Path;
 
 public class RewriteDryRunTask extends AbstractRewriteTask {
@@ -29,15 +33,13 @@ public class RewriteDryRunTask extends AbstractRewriteTask {
     private static final Logger logger = Logging.getLogger(RewriteDryRunTask.class);
 
     @OutputFile
-    public Path getReportPath() {
-        return getProjectLayout()
-                .getBuildDirectory()
-                .get()
-                .getAsFile()
-                .toPath()
-                .resolve("reports")
-                .resolve("rewrite")
-                .resolve("rewrite.patch");
+    @Nullable
+    public Path getReportPath() throws IOException {
+        ResultWriter resultWriter = getProjectParser().getResultWriter();
+        if (resultWriter instanceof ResultOutputFileWriter) {
+            return ((ResultOutputFileWriter) resultWriter).getReportPath();
+        }
+        return null;
     }
 
     @Inject
@@ -49,6 +51,6 @@ public class RewriteDryRunTask extends AbstractRewriteTask {
 
     @TaskAction
     public void run() {
-        getProjectParser().dryRun(getReportPath(), dumpGcActivity, throwable -> logger.info("Error during rewrite dry run", throwable));
+        getProjectParser().dryRun(dumpGcActivity, throwable -> logger.info("Error during rewrite dry run", throwable));
     }
 }
