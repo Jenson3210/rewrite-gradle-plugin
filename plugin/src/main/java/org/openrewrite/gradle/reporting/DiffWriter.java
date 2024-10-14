@@ -1,4 +1,4 @@
-package org.openrewrite.gradle.resultlogging;
+package org.openrewrite.gradle.reporting;
 
 import org.openrewrite.Result;
 import org.openrewrite.binary.Binary;
@@ -11,6 +11,7 @@ import java.io.IOException;
 public class DiffWriter extends ResultOutputFileWriter {
 
     private static final Logger logger = LoggerFactory.getLogger(DiffWriter.class);
+    public static final String FORMAT_DIFF = "diff";
 
     public DiffWriter(final String outputFilePath) throws IOException {
         super(outputFilePath == null ? "rewrite.patch" : outputFilePath);

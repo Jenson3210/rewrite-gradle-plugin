@@ -60,11 +60,11 @@ import org.openrewrite.gradle.marker.GradleProject;
 import org.openrewrite.gradle.marker.GradleProjectBuilder;
 import org.openrewrite.gradle.marker.GradleSettings;
 import org.openrewrite.gradle.marker.GradleSettingsBuilder;
-import org.openrewrite.gradle.resultlogging.DiffWriter;
-import org.openrewrite.gradle.resultlogging.ResultWriter;
-import org.openrewrite.gradle.resultlogging.ReviewdogJsonLinesWriter;
-import org.openrewrite.gradle.resultlogging.SarifWriter;
-import org.openrewrite.gradle.resultlogging.Slf4jWriter;
+import org.openrewrite.gradle.reporting.DiffWriter;
+import org.openrewrite.gradle.reporting.ResultWriter;
+import org.openrewrite.gradle.reporting.ReviewdogJsonLinesWriter;
+import org.openrewrite.gradle.reporting.SarifWriter;
+import org.openrewrite.gradle.reporting.Slf4jWriter;
 import org.openrewrite.groovy.GroovyParser;
 import org.openrewrite.internal.InMemoryLargeSourceSet;
 import org.openrewrite.internal.ListUtils;
@@ -148,6 +148,9 @@ import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 import static org.openrewrite.PathUtils.separatorsToUnix;
 import static org.openrewrite.Tree.randomId;
+import static org.openrewrite.gradle.reporting.DiffWriter.FORMAT_DIFF;
+import static org.openrewrite.gradle.reporting.ReviewdogJsonLinesWriter.FORMAT_REVIEWDOG;
+import static org.openrewrite.gradle.reporting.SarifWriter.FORMAT_SARIF;
 import static org.openrewrite.tree.ParsingExecutionContextView.view;
 
 public class DefaultProjectParser implements GradleProjectParser {
@@ -321,6 +324,13 @@ public class DefaultProjectParser implements GradleProjectParser {
 
     public Collection<RecipeDescriptor> listRecipeDescriptors() {
         return environment().listRecipeDescriptors();
+    }
+
+    private Collection<RecipeDescriptor> listActiveRecipeDescriptors() {
+        List<String> activeRecipes = getActiveRecipes();
+        return listRecipeDescriptors().stream()
+                .filter(rd -> activeRecipes.contains(rd.getName()))
+                .collect(toList());
     }
 
     private static String indent(int indent, CharSequence content) {
@@ -585,7 +595,7 @@ public class DefaultProjectParser implements GradleProjectParser {
         }
     }
 
-    public ResultWriter getResultWriter() throws IOException {
+    private ResultWriter getResultWriter() throws IOException {
         String format = getReportFormat();
         String path = getReportPath();
         if (format == null) {
@@ -598,13 +608,13 @@ public class DefaultProjectParser implements GradleProjectParser {
                                                       .findFirst()
                                                       .orElse(null);
         switch (format) {
-            case "sarif":
-                writer = new SarifWriter(path, listRecipeDescriptors(), gitProvenance);
+            case FORMAT_SARIF:
+                writer = new SarifWriter(path, listActiveRecipeDescriptors(), gitProvenance);
                 break;
-            case "rdjsonl":
+            case FORMAT_REVIEWDOG:
                 writer = new ReviewdogJsonLinesWriter(path);
                 break;
-            case "diff":
+            case FORMAT_DIFF:
             default:
                 writer = new DiffWriter(path);
                 break;

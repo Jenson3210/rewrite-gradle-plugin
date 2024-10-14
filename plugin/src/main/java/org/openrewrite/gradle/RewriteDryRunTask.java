@@ -20,27 +20,18 @@ import org.gradle.api.logging.Logging;
 import org.gradle.api.specs.Specs;
 import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
-import org.openrewrite.gradle.resultlogging.ResultOutputFileWriter;
-import org.openrewrite.gradle.resultlogging.ResultWriter;
 
-import javax.annotation.Nullable;
 import javax.inject.Inject;
-import java.io.IOException;
+import java.io.File;
 import java.nio.file.Path;
+
+import static org.openrewrite.gradle.reporting.DiffWriter.FORMAT_DIFF;
+import static org.openrewrite.gradle.reporting.ReviewdogJsonLinesWriter.FORMAT_REVIEWDOG;
+import static org.openrewrite.gradle.reporting.SarifWriter.FORMAT_SARIF;
 
 public class RewriteDryRunTask extends AbstractRewriteTask {
 
     private static final Logger logger = Logging.getLogger(RewriteDryRunTask.class);
-
-    @OutputFile
-    @Nullable
-    public Path getReportPath() throws IOException {
-        ResultWriter resultWriter = getProjectParser().getResultWriter();
-        if (resultWriter instanceof ResultOutputFileWriter) {
-            return ((ResultOutputFileWriter) resultWriter).getReportPath();
-        }
-        return null;
-    }
 
     @Inject
     public RewriteDryRunTask() {
@@ -52,5 +43,34 @@ public class RewriteDryRunTask extends AbstractRewriteTask {
     @TaskAction
     public void run() {
         getProjectParser().dryRun(dumpGcActivity, throwable -> logger.info("Error during rewrite dry run", throwable));
+    }
+
+    @OutputFile
+    public Path getReportPath() {
+        GradleProjectParser parser = getProjectParser();
+        String path = parser.getReportPath();
+        if (path != null && !path.isEmpty()) {
+            return new File(path).toPath();
+        }
+        String format = parser.getReportFormat();
+        Path defaultPath = getProjectLayout()
+                .getBuildDirectory()
+                .get()
+                .getAsFile()
+                .toPath()
+                .resolve("reports")
+                .resolve("rewrite");
+        if (format == null || format.isEmpty()) {
+            return defaultPath.resolve("rewrite.patch");
+        }
+        switch (format) {
+            case FORMAT_SARIF:
+                return defaultPath.resolve("sarif.json");
+            case FORMAT_REVIEWDOG:
+                return defaultPath.resolve("rewrite.jsonl");
+            case FORMAT_DIFF:
+            default:
+                return defaultPath.resolve("rewrite.patch");
+        }
     }
 }

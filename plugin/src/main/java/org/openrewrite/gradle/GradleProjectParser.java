@@ -16,10 +16,8 @@
 package org.openrewrite.gradle;
 
 import org.gradle.internal.service.ServiceRegistry;
-import org.openrewrite.gradle.resultlogging.ResultWriter;
 
 import javax.annotation.Nullable;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
@@ -35,8 +33,6 @@ public interface GradleProjectParser {
 
     @Nullable
     String getReportFormat();
-
-    ResultWriter getResultWriter() throws IOException;
 
     List<String> getAvailableStyles();
 

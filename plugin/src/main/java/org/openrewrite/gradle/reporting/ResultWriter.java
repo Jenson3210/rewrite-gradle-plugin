@@ -1,4 +1,4 @@
-package org.openrewrite.gradle.resultlogging;
+package org.openrewrite.gradle.reporting;
 
 import org.openrewrite.Result;
 

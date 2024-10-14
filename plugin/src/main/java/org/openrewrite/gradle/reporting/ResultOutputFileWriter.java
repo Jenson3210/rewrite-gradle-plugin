@@ -1,4 +1,4 @@
-package org.openrewrite.gradle.resultlogging;
+package org.openrewrite.gradle.reporting;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

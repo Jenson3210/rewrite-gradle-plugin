@@ -1,7 +1,8 @@
-package org.openrewrite.gradle.resultlogging;
+package org.openrewrite.gradle.reporting;
 
 import com.contrastsecurity.sarif.Artifact;
 import com.contrastsecurity.sarif.ArtifactLocation;
+import com.contrastsecurity.sarif.Message;
 import com.contrastsecurity.sarif.MultiformatMessageString;
 import com.contrastsecurity.sarif.ReportingDescriptor;
 import com.contrastsecurity.sarif.Run;
@@ -28,6 +29,7 @@ import java.util.stream.Stream;
 public class SarifWriter extends ResultOutputFileWriter {
 
     private static final Logger logger = Logging.getLogger(SarifWriter.class);
+    public static final String FORMAT_SARIF = "sarif";
 
     private final List<com.contrastsecurity.sarif.Result> results;
     private final Set<ReportingDescriptor> rules;
@@ -42,22 +44,62 @@ public class SarifWriter extends ResultOutputFileWriter {
 
     @Override
     public void generated(final Result result) {
-
+        for (RecipeDescriptor recipe : result.getRecipeDescriptorsThatMadeChanges()) {
+            // We do not set a level as we do not have a concept of change severity in OpenRewrite
+            com.contrastsecurity.sarif.Result sarifResult = new com.contrastsecurity.sarif.Result();
+            sarifResult.setRuleId(recipe.getName());
+            sarifResult.setMessage(new Message().withText(String.format("According to recipe **%s**, a new file (%s) was generated", recipe, result.getAfter().getSourcePath())));
+            //TODO setLocations(), but how? :)
+            //TODO setFixes(), but how? :)
+            String diff = result.diff();
+            logger.warn("Diff: {}", diff);
+            results.add(sarifResult);
+        }
     }
 
     @Override
     public void deleted(final Result result) {
-
+        for (RecipeDescriptor recipe : result.getRecipeDescriptorsThatMadeChanges()) {
+            // We do not set a level as we do not have a concept of change severity in OpenRewrite
+            com.contrastsecurity.sarif.Result sarifResult = new com.contrastsecurity.sarif.Result();
+            sarifResult.setRuleId(recipe.getName());
+            sarifResult.setMessage(new Message().withText(String.format("According to recipe **%s**, %s was deleted", recipe, result.getBefore().getSourcePath())));
+            //TODO setLocations(), but how? :)
+            //TODO setFixes(), but how? :)
+            String diff = result.diff();
+            logger.warn("Diff: {}", diff);
+            results.add(sarifResult);
+        }
     }
 
     @Override
     public void moved(final Result result) {
-
+        for (RecipeDescriptor recipe : result.getRecipeDescriptorsThatMadeChanges()) {
+            // We do not set a level as we do not have a concept of change severity in OpenRewrite
+            com.contrastsecurity.sarif.Result sarifResult = new com.contrastsecurity.sarif.Result();
+            sarifResult.setRuleId(recipe.getName());
+            sarifResult.setMessage(new Message().withText(String.format("According to recipe **%s**, %s was moved to %s", recipe, result.getBefore().getSourcePath(), result.getAfter().getSourcePath())));
+            //TODO setLocations(), but how? :)
+            //TODO setFixes(), but how? :)
+            String diff = result.diff();
+            logger.warn("Diff: {}", diff);
+            results.add(sarifResult);
+        }
     }
 
     @Override
     public void altered(final Result result) {
-
+        for (RecipeDescriptor recipe : result.getRecipeDescriptorsThatMadeChanges()) {
+            // We do not set a level as we do not have a concept of change severity in OpenRewrite
+            com.contrastsecurity.sarif.Result sarifResult = new com.contrastsecurity.sarif.Result();
+            sarifResult.setRuleId(recipe.getName());
+            sarifResult.setMessage(new Message().withText(String.format("According to recipe **%s**, %s was altered", recipe, result.getBefore().getSourcePath())));
+            //TODO setLocations(), but how? :)
+            //TODO setFixes(), but how? :)
+            String diff = result.diff();
+            logger.warn("Diff: {}", diff);
+            results.add(sarifResult);
+        }
     }
 
     @Override
@@ -107,14 +149,16 @@ public class SarifWriter extends ResultOutputFileWriter {
             return null;
         }
 
-        return activeRecipes.stream().flatMap(r -> Stream.concat(Stream.of(r), r.getRecipeList().stream())).map(this::initializeRule).collect(Collectors.toSet());
+        return activeRecipes.stream()
+                            .flatMap(r -> Stream.concat(Stream.of(r), r.getRecipeList().stream()))
+                            .map(this::initializeRule)
+                            .collect(Collectors.toSet());
     }
 
     private ReportingDescriptor initializeRule(RecipeDescriptor recipe) {
         ReportingDescriptor rule = new ReportingDescriptor();
         rule.setId(recipe.getName());
         rule.setName(recipe.getDisplayName());
-        rule.setHelpUri(recipe.getSource());
         rule.setFullDescription(new MultiformatMessageString().withText(recipe.getDescription()));
 
         return rule;
