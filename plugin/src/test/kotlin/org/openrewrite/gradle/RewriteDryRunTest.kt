@@ -93,6 +93,8 @@ class RewriteDryRunTest : RewritePluginTest {
     }
 
     @Test
+    //TODO testing further!
+    // ALSO do we want to allow file output in normal run also?
     fun `rewriteDryRun runs successfully with requested output`() {
         //language=java
         val helloWorld = """
