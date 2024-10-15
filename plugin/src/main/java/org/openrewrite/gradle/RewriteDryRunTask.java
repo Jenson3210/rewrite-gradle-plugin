@@ -26,7 +26,6 @@ import java.io.File;
 import java.nio.file.Path;
 
 import static org.openrewrite.gradle.reporting.DiffWriter.FORMAT_DIFF;
-import static org.openrewrite.gradle.reporting.ReviewdogJsonLinesWriter.FORMAT_REVIEWDOG;
 import static org.openrewrite.gradle.reporting.SarifWriter.FORMAT_SARIF;
 
 public class RewriteDryRunTask extends AbstractRewriteTask {
@@ -66,8 +65,6 @@ public class RewriteDryRunTask extends AbstractRewriteTask {
         switch (format) {
             case FORMAT_SARIF:
                 return defaultPath.resolve("sarif.json");
-            case FORMAT_REVIEWDOG:
-                return defaultPath.resolve("rewrite.jsonl");
             case FORMAT_DIFF:
             default:
                 return defaultPath.resolve("rewrite.patch");

@@ -62,7 +62,6 @@ import org.openrewrite.gradle.marker.GradleSettings;
 import org.openrewrite.gradle.marker.GradleSettingsBuilder;
 import org.openrewrite.gradle.reporting.DiffWriter;
 import org.openrewrite.gradle.reporting.ResultWriter;
-import org.openrewrite.gradle.reporting.ReviewdogJsonLinesWriter;
 import org.openrewrite.gradle.reporting.SarifWriter;
 import org.openrewrite.gradle.reporting.Slf4jWriter;
 import org.openrewrite.groovy.GroovyParser;
@@ -149,7 +148,6 @@ import static java.util.stream.Collectors.toMap;
 import static org.openrewrite.PathUtils.separatorsToUnix;
 import static org.openrewrite.Tree.randomId;
 import static org.openrewrite.gradle.reporting.DiffWriter.FORMAT_DIFF;
-import static org.openrewrite.gradle.reporting.ReviewdogJsonLinesWriter.FORMAT_REVIEWDOG;
 import static org.openrewrite.gradle.reporting.SarifWriter.FORMAT_SARIF;
 import static org.openrewrite.tree.ParsingExecutionContextView.view;
 
@@ -610,9 +608,6 @@ public class DefaultProjectParser implements GradleProjectParser {
         switch (format) {
             case FORMAT_SARIF:
                 writer = new SarifWriter(path, listActiveRecipeDescriptors(), gitProvenance);
-                break;
-            case FORMAT_REVIEWDOG:
-                writer = new ReviewdogJsonLinesWriter(path);
                 break;
             case FORMAT_DIFF:
             default:
