@@ -107,14 +107,11 @@ class RewriteDryRunTest : RewritePluginTest {
                 """
                 type: specs.openrewrite.org/v1beta/recipe
                 name: org.openrewrite.gradle.SayHello
-                description: Test.
+                description: Test 2.
                 recipeList:
-                  - org.openrewrite.java.ChangeMethodName:
-                      methodPattern: org.openrewrite.before.HelloWorld sayGoodbye()
-                      newMethodName: sayHello
-                  - org.openrewrite.java.ChangePackage:
-                      oldPackageName: org.openrewrite.before
-                      newPackageName: org.openrewrite.after
+                  - org.openrewrite.text.CreateTextFile:
+                      fileContents: "HELLO\n\n\n\tWORLD\n\n"
+                      relativeFileName: test.txt
             """
             )
             buildGradle(
@@ -133,10 +130,25 @@ class RewriteDryRunTest : RewritePluginTest {
                 }
                 
                 rewrite {
-                    activeRecipe("org.openrewrite.gradle.SayHello", "org.openrewrite.java.format.AutoFormat")
+//                    activeRecipe("org.openrewrite.gradle.SayHello", "org.openrewrite.java.format.AutoFormat")
+                    activeRecipe("org.openrewrite.gradle.SayHello")
                 }
             """
             )
+            textFile(".gitlab-ci.yml", """
+                default:
+                  tags: ['test']
+                
+                # Include reviewdog/mod-cli
+                # re
+                include:
+                  - project: BPSSDPOS/openrewrite/cicd-pipelines
+                    file: 'pull-request.yaml'
+                
+                stages:
+                  - build
+                  - update
+                """.trimIndent())
             sourceSet("main") {
                 java(helloWorld)
                 java("""
